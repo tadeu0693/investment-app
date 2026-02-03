@@ -77,6 +77,20 @@ const App = () => {
     }
   }, []);
 
+  // Determina o impacto da notícia baseado em palavras-chave
+  const determinarImpacto = useCallback((texto) => {
+    const textoLower = texto.toLowerCase();
+    const palavrasPositivas = ['alta', 'crescimento', 'lucro', 'recorde', 'positivo', 'valoriza', 'sobe', 'dividendos'];
+    const palavrasNegativas = ['queda', 'crise', 'prejuízo', 'negativo', 'desvaloriza', 'cai', 'risco'];
+    
+    const temPositivo = palavrasPositivas.some(p => textoLower.includes(p));
+    const temNegativo = palavrasNegativas.some(p => textoLower.includes(p));
+    
+    if (temPositivo && !temNegativo) return 'positivo';
+    if (temNegativo && !temPositivo) return 'negativo';
+    return 'neutro';
+  }, []);
+
   // Função para buscar notícias (usando uma API pública de exemplo)
   const fetchNoticias = useCallback(async () => {
     try {
@@ -108,20 +122,6 @@ const App = () => {
       ]);
     }
   }, [determinarImpacto]);
-
-  // Determina o impacto da notícia baseado em palavras-chave
-  const determinarImpacto = useCallback((texto) => {
-    const textoLower = texto.toLowerCase();
-    const palavrasPositivas = ['alta', 'crescimento', 'lucro', 'recorde', 'positivo', 'valoriza', 'sobe', 'dividendos'];
-    const palavrasNegativas = ['queda', 'crise', 'prejuízo', 'negativo', 'desvaloriza', 'cai', 'risco'];
-    
-    const temPositivo = palavrasPositivas.some(p => textoLower.includes(p));
-    const temNegativo = palavrasNegativas.some(p => textoLower.includes(p));
-    
-    if (temPositivo && !temNegativo) return 'positivo';
-    if (temNegativo && !temPositivo) return 'negativo';
-    return 'neutro';
-  }, []);
 
   // Calcular análise técnica simplificada
   const calcularAnalise = (preco, variacao) => {
