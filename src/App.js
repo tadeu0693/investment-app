@@ -155,66 +155,144 @@ const App = () => {
   // Função para buscar notícias (usando uma API pública de exemplo)
   const fetchNoticias = useCallback(async () => {
     try {
-      // Usando API de notícias sobre economia brasileira com token
-      const response = await fetch(`https://brapi.dev/api/v2/news?token=${BRAPI_TOKEN}`);
+      // Tentativa 1: API Brapi (notícias brasileiras de economia)
+      console.log('Tentando buscar notícias da Brapi...');
+      const responseBrapi = await fetch(`https://brapi.dev/api/v2/news?token=${BRAPI_TOKEN}`);
       
-      if (!response.ok) {
-        throw new Error('API de notícias indisponível');
+      if (responseBrapi.ok) {
+        const data = await responseBrapi.json();
+        
+        if (data.news && data.news.length > 0) {
+          console.log('✅ Notícias carregadas da Brapi:', data.news.length);
+          const noticiasFormatadas = data.news.slice(0, 5).map(noticia => ({
+            titulo: noticia.title,
+            resumo: noticia.text || noticia.summary || 'Sem descrição disponível',
+            url: noticia.link || noticia.url,
+            fonte: noticia.source || 'Brapi News',
+            data: new Date(noticia.updatedAt || noticia.publishedAt || Date.now()),
+            impacto: determinarImpacto((noticia.title || '') + ' ' + (noticia.text || ''))
+          }));
+          setNoticias(noticiasFormatadas);
+          return; // Sucesso! Sai da função
+        }
       }
       
-      const data = await response.json();
+      // Tentativa 2: NewsAPI.org (plano gratuito) - Notícias de negócios do Brasil
+      console.log('Tentando buscar notícias da NewsAPI...');
+      // Nota: NewsAPI.org requer cadastro grátis em https://newsapi.org/
+      // Chave de exemplo (substitua pela sua): 'demo' permite apenas alguns requests
+      const responseNewsAPI = await fetch(
+        `https://newsapi.org/v2/top-headlines?country=br&category=business&apiKey=demo`
+      );
       
-      if (data.news && data.news.length > 0) {
-        const noticiasFormatadas = data.news.slice(0, 5).map(noticia => ({
-          titulo: noticia.title,
-          resumo: noticia.text,
-          url: noticia.link,
-          fonte: noticia.source,
-          data: new Date(noticia.updatedAt),
-          impacto: determinarImpacto(noticia.title + ' ' + noticia.text)
-        }));
-        setNoticias(noticiasFormatadas);
-      } else {
-        throw new Error('Dados não encontrados');
+      if (responseNewsAPI.ok) {
+        const data = await responseNewsAPI.json();
+        
+        if (data.articles && data.articles.length > 0) {
+          console.log('✅ Notícias carregadas da NewsAPI:', data.articles.length);
+          const noticiasFormatadas = data.articles.slice(0, 5).map(article => ({
+            titulo: article.title,
+            resumo: article.description || article.content || 'Leia mais no link',
+            url: article.url,
+            fonte: article.source?.name || 'NewsAPI',
+            data: new Date(article.publishedAt),
+            impacto: determinarImpacto((article.title || '') + ' ' + (article.description || ''))
+          }));
+          setNoticias(noticiasFormatadas);
+          return; // Sucesso! Sai da função
+        }
       }
+      
+      // Tentativa 3: RSS do Valor Econômico via RSS2JSON
+      console.log('Tentando buscar notícias via RSS...');
+      const responseRSS = await fetch(
+        `https://api.rss2json.com/v1/api.json?rss_url=https://valor.globo.com/rss/ultimas/`
+      );
+      
+      if (responseRSS.ok) {
+        const data = await responseRSS.json();
+        
+        if (data.items && data.items.length > 0) {
+          console.log('✅ Notícias carregadas do RSS:', data.items.length);
+          const noticiasFormatadas = data.items.slice(0, 5).map(item => ({
+            titulo: item.title,
+            resumo: item.description?.replace(/<[^>]*>/g, '').substring(0, 200) || 'Leia mais no link',
+            url: item.link,
+            fonte: 'Valor Econômico',
+            data: new Date(item.pubDate),
+            impacto: determinarImpacto((item.title || '') + ' ' + (item.description || ''))
+          }));
+          setNoticias(noticiasFormatadas);
+          return; // Sucesso! Sai da função
+        }
+      }
+      
+      // Se chegou aqui, nenhuma API funcionou
+      throw new Error('Todas as APIs de notícias falharam');
+      
     } catch (error) {
-      console.error('Erro ao buscar notícias:', error);
-      // Fallback com notícias simuladas realistas
+      console.error('❌ Erro ao buscar notícias de todas as fontes:', error);
+      
+      // ÚLTIMO RECURSO: Notícias genéricas atualizadas
+      console.log('⚠️ Usando notícias de fallback (genéricas)');
       const noticiasSimuladas = [
         {
-          titulo: "Ibovespa sobe 1,2% com expectativa de queda de juros",
-          resumo: "Bolsa brasileira fecha em alta com investidores otimistas sobre decisão do Copom. Petrobras e Vale lideram ganhos.",
+          titulo: "⚠️ Notícias em modo offline - APIs indisponíveis",
+          resumo: "As APIs de notícias estão temporariamente indisponíveis. Os dados de cotações continuam funcionando normalmente. Clique em 'Atualizar' para tentar novamente.",
+          fonte: "Sistema",
+          data: new Date(),
+          impacto: "neutro",
+          url: "#"
+        },
+        {
+          titulo: "Copom mantém Selic em 15% ao ano pelo segundo mês consecutivo",
+          resumo: "Banco Central decide manter taxa básica de juros em nível elevado devido à inflação persistente. Mercado aguarda sinais de quando começará ciclo de cortes.",
+          fonte: "Valor Econômico (offline)",
+          data: new Date(Date.now() - 3 * 60 * 60 * 1000),
+          impacto: "neutro",
+          url: "#"
+        },
+        {
+          titulo: "Ibovespa oscila próximo aos 130 mil pontos com cautela externa",
+          resumo: "Bolsa brasileira opera em linha com mercados internacionais. Investidores monitoram dados de inflação nos EUA e China.",
+          fonte: "InfoMoney (offline)",
+          data: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          impacto: "neutro",
+          url: "#"
+        },
+        {
+          titulo: "Petrobras sobe com preço do petróleo acima de US$ 85 por barril",
+          resumo: "Tensões no Oriente Médio impulsionam commodity. PETR4 lidera ganhos do Ibovespa com alta de 2,3%.",
+          fonte: "Estadão (offline)",
+          data: new Date(Date.now() - 4 * 60 * 60 * 1000),
+          impacto: "positivo",
+          url: "#"
+        },
+        {
+          titulo: "Dólar opera próximo de R$ 5,70 com aversão ao risco global",
+          resumo: "Moeda americana se fortalece com investidores buscando segurança. Real acompanha movimento de outras moedas emergentes.",
+          fonte: "G1 Economia (offline)",
+          data: new Date(Date.now() - 5 * 60 * 60 * 1000),
+          impacto: "negativo",
+          url: "#"
+        }
+      ];
+      setNoticias(noticiasSimuladas);
+    }
+  }, [determinarImpacto, BRAPI_TOKEN]);
+          resumo: "Bolsa brasileira opera em linha com mercados internacionais. Investidores monitoram dados de inflação nos EUA e China.",
           fonte: "InfoMoney",
-          data: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 horas atrás
-          impacto: "positivo"
-        },
-        {
-          titulo: "Dólar recua para R$ 5,27 com entrada de fluxo estrangeiro",
-          resumo: "Moeda americana cai 0,8% com otimismo do mercado sobre política fiscal. Real se valoriza entre emergentes.",
-          fonte: "Valor Econômico",
-          data: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 horas atrás
-          impacto: "positivo"
-        },
-        {
-          titulo: "Petrobras anuncia novo dividendo extraordinário",
-          resumo: "Empresa aprova distribuição de R$ 10 bilhões em proventos. Ação PETR4 valoriza 3% após anúncio.",
-          fonte: "Estadão",
-          data: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 horas atrás
-          impacto: "positivo"
-        },
-        {
-          titulo: "Banco Central mantém Selic em 10,50% ao ano",
-          resumo: "Copom decide manter taxa básica de juros estável pela terceira reunião consecutiva. Mercado já precificava decisão.",
-          fonte: "G1 Economia",
-          data: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 dia atrás
+          data: new Date(Date.now() - 2 * 60 * 60 * 1000),
           impacto: "neutro"
         },
         {
-          titulo: "Magazine Luiza reporta crescimento de 15% nas vendas online",
-          resumo: "Varejista supera expectativas no e-commerce. Analistas recomendam compra de MGLU3 com target de R$ 12.",
-          fonte: "Bloomberg",
-          data: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 dias atrás
-          impacto: "positivo"
+        {
+          titulo: "Petrobras sobe com preço do petróleo acima de US$ 85 por barril",
+          resumo: "Tensões no Oriente Médio impulsionam commodity. PETR4 lidera ganhos do Ibovespa com alta de 2,3%.",
+          fonte: "Estadão",
+          data: new Date(Date.now() - 4 * 60 * 60 * 1000),
+          impacto: "positivo",
+          url: "#"
         }
       ];
       setNoticias(noticiasSimuladas);
@@ -649,8 +727,32 @@ const App = () => {
               Análises Técnicas em Tempo Real
             </h2>
             
+            {/* Mensagem de carregamento */}
+            {loading && (
+              <div className="bg-slate-800/50 backdrop-blur rounded-xl p-8 border border-slate-700 text-center">
+                <RefreshCw className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
+                <p className="text-slate-300">Carregando análises técnicas...</p>
+              </div>
+            )}
+            
+            {/* Mensagem quando não há dados */}
+            {!loading && !ibovespa && !dolar && (
+              <div className="bg-slate-800/50 backdrop-blur rounded-xl p-8 border border-slate-700 text-center">
+                <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+                <h3 className="text-xl font-bold mb-2">Dados não disponíveis</h3>
+                <p className="text-slate-400 mb-4">Não foi possível carregar os dados para análise.</p>
+                <button
+                  onClick={atualizarDados}
+                  className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg transition-all inline-flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Tentar Novamente
+                </button>
+              </div>
+            )}
+            
             {/* Análise Ibovespa */}
-            {ibovespa && (() => {
+            {!loading && ibovespa && (() => {
               const analise = calcularAnalise(ibovespa.valor, ibovespa.variacao, ibovespa.maximo, ibovespa.minimo, ibovespa.volume);
               return analise && (
                 <div className="bg-slate-800/50 backdrop-blur rounded-xl p-6 border border-slate-700">
@@ -779,7 +881,7 @@ const App = () => {
             })()}
 
             {/* Análise Dólar */}
-            {dolar && (() => {
+            {!loading && dolar && (() => {
               const analise = calcularAnalise(dolar.valor, dolar.variacao, dolar.maximo, dolar.minimo, 1000000000);
               return analise && (
                 <div className="bg-slate-800/50 backdrop-blur rounded-xl p-6 border border-slate-700">
@@ -789,35 +891,88 @@ const App = () => {
                       <span className="text-2xl font-bold text-slate-300">R$ {dolar.valor.toFixed(3)}</span>
                     </div>
                     <div className={`px-4 py-2 rounded-lg font-bold ${
-                      analise.sinal.includes('compra') ? 'bg-green-500/20 text-green-400 border border-green-500' : 
-                      analise.sinal.includes('venda') ? 'bg-red-500/20 text-red-400 border border-red-500' :
+                      analise.scoreGeral.score >= 60 ? 'bg-green-500/20 text-green-400 border border-green-500' : 
+                      analise.scoreGeral.score <= 40 ? 'bg-red-500/20 text-red-400 border border-red-500' :
                       'bg-yellow-500/20 text-yellow-400 border border-yellow-500'
                     }`}>
-                      {analise.sinal.includes('compra') ? '🟢 COMPRA' : 
-                       analise.sinal.includes('venda') ? '🔴 VENDA' : '🟡 NEUTRO'}
+                      {analise.scoreGeral.classificacao.toUpperCase()}
                     </div>
                   </div>
                   
-                  <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  {/* Indicadores Principais */}
+                  <div className="grid md:grid-cols-4 gap-3 mb-4">
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">Mínimo do Dia</div>
-                      <div className="font-bold">R$ {dolar.minimo.toFixed(3)}</div>
+                      <div className="text-xs text-slate-400 mb-1">RSI (IFR)</div>
+                      <div className="font-bold text-lg">{analise.rsi.valor}</div>
+                      <div className="text-xs text-slate-400">{analise.rsi.interpretacao}</div>
                     </div>
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">Máximo do Dia</div>
-                      <div className="font-bold">R$ {dolar.maximo.toFixed(3)}</div>
+                      <div className="text-xs text-slate-400 mb-1">Volatilidade</div>
+                      <div className="font-bold text-lg">{analise.volatilidade.percentual}%</div>
+                      <div className="text-xs text-slate-400">{analise.volatilidade.interpretacao}</div>
                     </div>
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">RSI Estimado</div>
-                      <div className="font-bold">{analise.rsi}</div>
+                      <div className="text-xs text-slate-400 mb-1">Posição Range</div>
+                      <div className="font-bold text-lg">{analise.posicaoRange.percentual}%</div>
+                      <div className="text-xs text-slate-400">{analise.posicaoRange.zona}</div>
+                    </div>
+                    <div className={`rounded-lg p-3 ${
+                      analise.scoreGeral.score >= 60 ? 'bg-green-500/20' : 
+                      analise.scoreGeral.score <= 40 ? 'bg-red-500/20' : 'bg-yellow-500/20'
+                    }`}>
+                      <div className="text-xs text-slate-400 mb-1">Score Geral</div>
+                      <div className="font-bold text-lg">{analise.scoreGeral.score}/100</div>
+                      <div className="text-xs text-slate-400">{analise.scoreGeral.classificacao}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Análise de Momentum */}
+                  <div className="grid md:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-700/30 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-2">Momentum</div>
+                      <div className="font-bold mb-1">{analise.momentum.momentum}</div>
+                      <div className="text-xs text-slate-400">{analise.momentum.tendencia}</div>
+                    </div>
+                    <div className="bg-slate-700/30 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-2">Força do Movimento</div>
+                      <div className="font-bold mb-1">{analise.forca.forca}</div>
+                      <div className="text-xs text-slate-400">Confiança: {analise.forca.confianca}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Pivot Points */}
+                  <div className="bg-slate-700/30 rounded-lg p-4 mb-4">
+                    <div className="text-xs text-slate-400 mb-3 font-semibold">Pivot Points (Suportes e Resistências)</div>
+                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                      <div>
+                        <div className="text-red-400 mb-1">R2</div>
+                        <div className="font-bold">R$ {parseFloat(analise.pivots.resistencia2).toFixed(3)}</div>
+                      </div>
+                      <div>
+                        <div className="text-red-300 mb-1">R1</div>
+                        <div className="font-bold">R$ {parseFloat(analise.pivots.resistencia1).toFixed(3)}</div>
+                      </div>
+                      <div>
+                        <div className="text-blue-400 mb-1">PP</div>
+                        <div className="font-bold text-blue-400">R$ {parseFloat(analise.pivots.pivot).toFixed(3)}</div>
+                      </div>
+                      <div>
+                        <div className="text-green-300 mb-1">S1</div>
+                        <div className="font-bold">R$ {parseFloat(analise.pivots.suporte1).toFixed(3)}</div>
+                      </div>
+                      <div>
+                        <div className="text-green-400 mb-1">S2</div>
+                        <div className="font-bold">R$ {parseFloat(analise.pivots.suporte2).toFixed(3)}</div>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Recomendação Final */}
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <div className="font-semibold text-blue-400 mb-1">Recomendação</div>
+                        <div className="font-semibold text-blue-400 mb-1">Análise Completa</div>
                         <div className="text-sm text-slate-300">{analise.recomendacao}</div>
                       </div>
                     </div>
@@ -827,36 +982,52 @@ const App = () => {
             })()}
 
             {/* Top 3 Ações */}
-            <div className="mt-6">
-              <h3 className="text-lg font-bold mb-4">Análise das Principais Ações</h3>
-              {acoes.slice(0, 3).map((acao, idx) => {
-                // Estimando máxima e mínima baseado na variação
-                const variacaoAbs = Math.abs(acao.variacao);
-                const estimativaRange = acao.preco * (variacaoAbs / 100);
-                const maximo = acao.preco + estimativaRange;
-                const minimo = acao.preco - estimativaRange;
-                const analise = calcularAnalise(acao.preco, acao.variacao, maximo, minimo, acao.volume);
-                return analise && (
-                  <div key={idx} className="bg-slate-800/50 backdrop-blur rounded-xl p-4 border border-slate-700 mb-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <div>
-                        <h4 className="font-bold">{acao.ticker}</h4>
-                        <p className="text-sm text-slate-400">R$ {acao.preco.toFixed(2)}</p>
+            {!loading && acoes.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-bold mb-4">Análise das Principais Ações</h3>
+                {acoes.slice(0, 3).map((acao, idx) => {
+                  // Estimando máxima e mínima baseado na variação
+                  const variacaoAbs = Math.abs(acao.variacao);
+                  const estimativaRange = acao.preco * (variacaoAbs / 100);
+                  const maximo = acao.preco + estimativaRange;
+                  const minimo = acao.preco - estimativaRange;
+                  const analise = calcularAnalise(acao.preco, acao.variacao, maximo, minimo, acao.volume);
+                  return analise && (
+                    <div key={idx} className="bg-slate-800/50 backdrop-blur rounded-xl p-4 border border-slate-700 mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <h4 className="font-bold">{acao.ticker}</h4>
+                          <p className="text-sm text-slate-400">{acao.nome}</p>
+                          <p className="text-sm font-bold text-slate-300">R$ {acao.preco.toFixed(2)}</p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                          analise.scoreGeral.score >= 60 ? 'bg-green-500/20 text-green-400' : 
+                          analise.scoreGeral.score <= 40 ? 'bg-red-500/20 text-red-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {analise.scoreGeral.classificacao}
+                        </div>
                       </div>
-                      <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                        analise.sinal.includes('compra') ? 'bg-green-500/20 text-green-400' : 
-                        analise.sinal.includes('venda') ? 'bg-red-500/20 text-red-400' :
-                        'bg-yellow-500/20 text-yellow-400'
-                      }`}>
-                        {analise.sinal.includes('compra') ? 'COMPRA' : 
-                         analise.sinal.includes('venda') ? 'VENDA' : 'NEUTRO'}
+                      <div className="grid grid-cols-3 gap-2 mb-2 text-xs">
+                        <div className="bg-slate-700/30 rounded p-2">
+                          <div className="text-slate-400">RSI</div>
+                          <div className="font-bold">{analise.rsi.valor}</div>
+                        </div>
+                        <div className="bg-slate-700/30 rounded p-2">
+                          <div className="text-slate-400">Score</div>
+                          <div className="font-bold">{analise.scoreGeral.score}/100</div>
+                        </div>
+                        <div className="bg-slate-700/30 rounded p-2">
+                          <div className="text-slate-400">Volatilidade</div>
+                          <div className="font-bold">{analise.volatilidade.percentual}%</div>
+                        </div>
                       </div>
+                      <p className="text-sm text-slate-300">{analise.recomendacao}</p>
                     </div>
-                    <p className="text-sm text-slate-300">{analise.recomendacao}</p>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
