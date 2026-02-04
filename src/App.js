@@ -222,37 +222,219 @@ const App = () => {
   }, [determinarImpacto, BRAPI_TOKEN]);
 
   // Calcular análise técnica simplificada
-  const calcularAnalise = (preco, variacao) => {
-    if (!preco || !variacao) return null;
+  // ============================================
+  // ANÁLISES TÉCNICAS PROFISSIONAIS
+  // ============================================
+  
+  // 1. Calcular RSI Real (aproximado com dados disponíveis)
+  const calcularRSIReal = (variacao) => {
+    // Aproximação mais realista do RSI usando a variação
+    // Em uma versão completa, usaríamos 14 períodos de histórico
+    const ganho = Math.max(variacao, 0);
+    const perda = Math.abs(Math.min(variacao, 0));
     
-    // RSI simulado baseado na variação
-    const rsi = 50 + (variacao * 2);
-    
-    // Sinal baseado em múltiplos fatores
-    let sinal = 'neutro';
-    if (variacao > 2 && rsi < 70) sinal = 'compra';
-    else if (variacao < -2 && rsi > 30) sinal = 'venda';
-    else if (variacao > 0.5) sinal = 'compra_fraca';
-    else if (variacao < -0.5) sinal = 'venda_fraca';
+    const rs = ganho === 0 ? 0 : perda === 0 ? 100 : ganho / perda;
+    const rsi = 100 - (100 / (1 + rs));
     
     return {
-      rsi: Math.min(100, Math.max(0, rsi)).toFixed(0),
-      sinal,
-      recomendacao: gerarRecomendacao(sinal, rsi, variacao)
+      valor: Math.round(rsi),
+      interpretacao: rsi > 70 ? 'Sobrecompra' : rsi < 30 ? 'Sobrevenda' : 'Neutro',
+      sinal: rsi > 70 ? 'venda' : rsi < 30 ? 'compra' : 'neutro'
+    };
+  };
+  
+  // 2. Calcular ATR (Volatilidade) - Average True Range
+  const calcularVolatilidade = (maximo, minimo, fechamento) => {
+    const range = maximo - minimo;
+    const percentualRange = (range / fechamento) * 100;
+    
+    return {
+      atr: range.toFixed(2),
+      percentual: percentualRange.toFixed(2),
+      interpretacao: percentualRange > 2 ? 'Alta' : percentualRange > 1 ? 'Moderada' : 'Baixa',
+      nivel: percentualRange > 2 ? 'alta' : percentualRange > 1 ? 'moderada' : 'baixa'
+    };
+  };
+  
+  // 3. Pivot Points - Suporte e Resistência
+  const calcularPivotPoints = (maximo, minimo, fechamento) => {
+    const pp = (maximo + minimo + fechamento) / 3;
+    const r1 = (2 * pp) - minimo;
+    const r2 = pp + (maximo - minimo);
+    const s1 = (2 * pp) - maximo;
+    const s2 = pp - (maximo - minimo);
+    
+    return {
+      pivot: pp.toFixed(2),
+      resistencia1: r1.toFixed(2),
+      resistencia2: r2.toFixed(2),
+      suporte1: s1.toFixed(2),
+      suporte2: s2.toFixed(2)
+    };
+  };
+  
+  // 4. Análise de Posição no Range (onde está o preço)
+  const analisarPosicaoRange = (atual, maximo, minimo) => {
+    const range = maximo - minimo;
+    const posicao = ((atual - minimo) / range) * 100;
+    
+    let zona = '';
+    let sinal = '';
+    
+    if (posicao > 70) {
+      zona = 'Topo do Range';
+      sinal = 'Próximo da resistência - considerar realização';
+    } else if (posicao < 30) {
+      zona = 'Fundo do Range';
+      sinal = 'Próximo do suporte - oportunidade de compra';
+    } else {
+      zona = 'Meio do Range';
+      sinal = 'Zona neutra - aguardar definição';
+    }
+    
+    return {
+      percentual: posicao.toFixed(1),
+      zona: zona,
+      sinal: sinal
+    };
+  };
+  
+  // 5. Análise de Força do Movimento (baseada em volume e variação)
+  const analisarForcaMovimento = (variacao, volume, volumeMedio = null) => {
+    const variacaoAbs = Math.abs(variacao);
+    
+    // Se temos volume médio, comparamos
+    const volumeFator = volumeMedio ? (volume / volumeMedio) : 1;
+    
+    let forca = '';
+    let confianca = '';
+    
+    if (variacaoAbs > 2 && volumeFator > 1.2) {
+      forca = 'Muito Forte';
+      confianca = 'Alta';
+    } else if (variacaoAbs > 1 && volumeFator > 1) {
+      forca = 'Forte';
+      confianca = 'Boa';
+    } else if (variacaoAbs > 0.5) {
+      forca = 'Moderada';
+      confianca = 'Moderada';
+    } else {
+      forca = 'Fraca';
+      confianca = 'Baixa';
+    }
+    
+    return {
+      forca: forca,
+      confianca: confianca,
+      volumeRelativo: volumeFator.toFixed(2),
+      direcao: variacao > 0 ? 'Alta' : variacao < 0 ? 'Baixa' : 'Lateral'
+    };
+  };
+  
+  // 6. Análise de Momentum (força da tendência)
+  const analisarMomentum = (variacao) => {
+    const variacaoAbs = Math.abs(variacao);
+    
+    let momentum = '';
+    let tendencia = '';
+    let recomendacao = '';
+    
+    if (variacao > 2) {
+      momentum = 'Forte Alta';
+      tendencia = 'Bullish (Comprador)';
+      recomendacao = 'Momento favorável para compra';
+    } else if (variacao > 0.5) {
+      momentum = 'Alta Moderada';
+      tendencia = 'Levemente Bullish';
+      recomendacao = 'Aguardar confirmação';
+    } else if (variacao < -2) {
+      momentum = 'Forte Queda';
+      tendencia = 'Bearish (Vendedor)';
+      recomendacao = 'Momento de cautela ou venda';
+    } else if (variacao < -0.5) {
+      momentum = 'Queda Moderada';
+      tendencia = 'Levemente Bearish';
+      recomendacao = 'Monitorar suportes';
+    } else {
+      momentum = 'Lateral';
+      tendencia = 'Neutro';
+      recomendacao = 'Mercado sem definição clara';
+    }
+    
+    return {
+      momentum: momentum,
+      tendencia: tendencia,
+      recomendacao: recomendacao,
+      intensidade: variacaoAbs.toFixed(2) + '%'
+    };
+  };
+  
+  // 7. Score Geral de Análise (0-100)
+  const calcularScoreGeral = (rsi, variacao, posicaoRange) => {
+    let score = 50; // Neutro
+    
+    // RSI contribui até 20 pontos
+    if (rsi.sinal === 'compra') score += 20;
+    else if (rsi.sinal === 'venda') score -= 20;
+    
+    // Variação contribui até 20 pontos
+    if (variacao > 2) score += 20;
+    else if (variacao > 0.5) score += 10;
+    else if (variacao < -2) score -= 20;
+    else if (variacao < -0.5) score -= 10;
+    
+    // Posição no range contribui até 10 pontos
+    const pos = parseFloat(posicaoRange.percentual);
+    if (pos < 30) score += 10; // No fundo, bom para comprar
+    else if (pos > 70) score -= 10; // No topo, risco de correção
+    
+    score = Math.max(0, Math.min(100, score));
+    
+    let classificacao = '';
+    if (score >= 70) classificacao = 'Forte Compra';
+    else if (score >= 55) classificacao = 'Compra';
+    else if (score >= 45) classificacao = 'Neutro';
+    else if (score >= 30) classificacao = 'Venda';
+    else classificacao = 'Forte Venda';
+    
+    return {
+      score: Math.round(score),
+      classificacao: classificacao
+    };
+  };
+  
+  // Função Principal de Análise Completa
+  const calcularAnalise = (preco, variacao, maximo, minimo, volume) => {
+    if (!preco || variacao === undefined) return null;
+    
+    const rsi = calcularRSIReal(variacao);
+    const volatilidade = calcularVolatilidade(maximo, minimo, preco);
+    const pivots = calcularPivotPoints(maximo, minimo, preco);
+    const posicaoRange = analisarPosicaoRange(preco, maximo, minimo);
+    const forca = analisarForcaMovimento(variacao, volume);
+    const momentum = analisarMomentum(variacao);
+    const scoreGeral = calcularScoreGeral(rsi, variacao, posicaoRange);
+    
+    return {
+      rsi: rsi,
+      volatilidade: volatilidade,
+      pivots: pivots,
+      posicaoRange: posicaoRange,
+      forca: forca,
+      momentum: momentum,
+      scoreGeral: scoreGeral,
+      // Recomendação final
+      recomendacao: gerarRecomendacaoCompleta(scoreGeral, rsi, momentum, posicaoRange)
     };
   };
 
-  const gerarRecomendacao = (sinal, rsi, variacao) => {
-    if (sinal === 'compra') {
-      return `Forte tendência de alta (${variacao > 0 ? '+' : ''}${variacao.toFixed(2)}%). RSI em ${rsi} indica espaço para valorização.`;
-    } else if (sinal === 'venda') {
-      return `Tendência de baixa (${variacao.toFixed(2)}%). RSI em ${rsi} sugere cautela ou realização de lucros.`;
-    } else if (sinal === 'compra_fraca') {
-      return `Leve tendência positiva. Aguardar confirmação antes de entrar.`;
-    } else if (sinal === 'venda_fraca') {
-      return `Leve pressão vendedora. Monitorar níveis de suporte.`;
-    }
-    return 'Mercado lateral. Aguardar definição de tendência.';
+  const gerarRecomendacaoCompleta = (score, rsi, momentum, posicaoRange) => {
+    let texto = `Score Geral: ${score.score}/100 (${score.classificacao}). `;
+    texto += `${momentum.recomendacao}. `;
+    texto += `RSI em ${rsi.valor} indica ${rsi.interpretacao.toLowerCase()}. `;
+    texto += `Preço está ${posicaoRange.zona.toLowerCase()} - ${posicaoRange.sinal}`;
+    
+    return texto;
   };
 
   // Atualizar todos os dados
@@ -469,7 +651,7 @@ const App = () => {
             
             {/* Análise Ibovespa */}
             {ibovespa && (() => {
-              const analise = calcularAnalise(ibovespa.valor, ibovespa.variacao);
+              const analise = calcularAnalise(ibovespa.valor, ibovespa.variacao, ibovespa.maximo, ibovespa.minimo, ibovespa.volume);
               return analise && (
                 <div className="bg-slate-800/50 backdrop-blur rounded-xl p-6 border border-slate-700">
                   <div className="flex justify-between items-start mb-4">
@@ -478,35 +660,116 @@ const App = () => {
                       <span className="text-2xl font-bold text-slate-300">{ibovespa.valor.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
                     </div>
                     <div className={`px-4 py-2 rounded-lg font-bold ${
-                      analise.sinal.includes('compra') ? 'bg-green-500/20 text-green-400 border border-green-500' : 
-                      analise.sinal.includes('venda') ? 'bg-red-500/20 text-red-400 border border-red-500' :
+                      analise.scoreGeral.score >= 60 ? 'bg-green-500/20 text-green-400 border border-green-500' : 
+                      analise.scoreGeral.score <= 40 ? 'bg-red-500/20 text-red-400 border border-red-500' :
                       'bg-yellow-500/20 text-yellow-400 border border-yellow-500'
                     }`}>
-                      {analise.sinal.includes('compra') ? '🟢 COMPRA' : 
-                       analise.sinal.includes('venda') ? '🔴 VENDA' : '🟡 NEUTRO'}
+                      {analise.scoreGeral.classificacao.toUpperCase()}
                     </div>
                   </div>
                   
-                  <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  {/* Indicadores Principais */}
+                  <div className="grid md:grid-cols-4 gap-3 mb-4">
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">Mínimo do Dia</div>
-                      <div className="font-bold">{ibovespa.minimo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
+                      <div className="text-xs text-slate-400 mb-1">RSI (IFR)</div>
+                      <div className="font-bold text-lg">{analise.rsi.valor}</div>
+                      <div className="text-xs text-slate-400">{analise.rsi.interpretacao}</div>
                     </div>
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">Máximo do Dia</div>
-                      <div className="font-bold">{ibovespa.maximo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
+                      <div className="text-xs text-slate-400 mb-1">Volatilidade</div>
+                      <div className="font-bold text-lg">{analise.volatilidade.percentual}%</div>
+                      <div className="text-xs text-slate-400">{analise.volatilidade.interpretacao}</div>
                     </div>
                     <div className="bg-slate-700/30 rounded-lg p-3">
-                      <div className="text-xs text-slate-400 mb-1">RSI Estimado</div>
-                      <div className="font-bold">{analise.rsi}</div>
+                      <div className="text-xs text-slate-400 mb-1">Posição Range</div>
+                      <div className="font-bold text-lg">{analise.posicaoRange.percentual}%</div>
+                      <div className="text-xs text-slate-400">{analise.posicaoRange.zona}</div>
+                    </div>
+                    <div className={`rounded-lg p-3 ${
+                      analise.scoreGeral.score >= 60 ? 'bg-green-500/20' : 
+                      analise.scoreGeral.score <= 40 ? 'bg-red-500/20' : 'bg-yellow-500/20'
+                    }`}>
+                      <div className="text-xs text-slate-400 mb-1">Score Geral</div>
+                      <div className="font-bold text-lg">{analise.scoreGeral.score}/100</div>
+                      <div className="text-xs text-slate-400">{analise.scoreGeral.classificacao}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Análise de Momentum e Força */}
+                  <div className="grid md:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-700/30 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-2">Momentum</div>
+                      <div className="font-bold mb-1">{analise.momentum.momentum}</div>
+                      <div className="text-xs text-slate-400">{analise.momentum.tendencia}</div>
+                    </div>
+                    <div className="bg-slate-700/30 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-2">Força do Movimento</div>
+                      <div className="font-bold mb-1">{analise.forca.forca}</div>
+                      <div className="text-xs text-slate-400">Confiança: {analise.forca.confianca}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Pivot Points */}
+                  <div className="bg-slate-700/30 rounded-lg p-4 mb-4">
+                    <div className="text-xs text-slate-400 mb-3 font-semibold">Pivot Points (Suportes e Resistências)</div>
+                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                      <div>
+                        <div className="text-red-400 mb-1">R2</div>
+                        <div className="font-bold">{parseFloat(analise.pivots.resistencia2).toLocaleString('pt-BR')}</div>
+                      </div>
+                      <div>
+                        <div className="text-red-300 mb-1">R1</div>
+                        <div className="font-bold">{parseFloat(analise.pivots.resistencia1).toLocaleString('pt-BR')}</div>
+                      </div>
+                      <div>
+                        <div className="text-blue-400 mb-1">PP</div>
+                        <div className="font-bold text-blue-400">{parseFloat(analise.pivots.pivot).toLocaleString('pt-BR')}</div>
+                      </div>
+                      <div>
+                        <div className="text-green-300 mb-1">S1</div>
+                        <div className="font-bold">{parseFloat(analise.pivots.suporte1).toLocaleString('pt-BR')}</div>
+                      </div>
+                      <div>
+                        <div className="text-green-400 mb-1">S2</div>
+                        <div className="font-bold">{parseFloat(analise.pivots.suporte2).toLocaleString('pt-BR')}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-2 text-center">
+                      Resistências (vermelho) | Pivot (azul) | Suportes (verde)
+                    </div>
+                  </div>
+                  
+                  {/* Range do Dia */}
+                  <div className="bg-slate-700/30 rounded-lg p-4 mb-4">
+                    <div className="text-xs text-slate-400 mb-2">Range do Dia</div>
+                    <div className="flex items-center gap-2 text-sm mb-2">
+                      <span className="text-green-400">Min:</span>
+                      <span className="font-bold">{ibovespa.minimo.toLocaleString('pt-BR')}</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="text-blue-400">Atual:</span>
+                      <span className="font-bold">{ibovespa.valor.toLocaleString('pt-BR')}</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="text-red-400">Max:</span>
+                      <span className="font-bold">{ibovespa.maximo.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="w-full bg-slate-600 rounded-full h-2 relative">
+                      <div 
+                        className="bg-gradient-to-r from-green-500 via-blue-500 to-red-500 h-2 rounded-full"
+                        style={{width: '100%'}}
+                      ></div>
+                      <div 
+                        className="absolute top-0 w-1 h-4 bg-white rounded-full -mt-1 shadow-lg"
+                        style={{left: `${analise.posicaoRange.percentual}%`}}
+                      ></div>
                     </div>
                   </div>
 
+                  {/* Recomendação Final */}
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <div className="font-semibold text-blue-400 mb-1">Recomendação</div>
+                        <div className="font-semibold text-blue-400 mb-1">Análise Completa</div>
                         <div className="text-sm text-slate-300">{analise.recomendacao}</div>
                       </div>
                     </div>
@@ -517,7 +780,7 @@ const App = () => {
 
             {/* Análise Dólar */}
             {dolar && (() => {
-              const analise = calcularAnalise(dolar.valor, dolar.variacao);
+              const analise = calcularAnalise(dolar.valor, dolar.variacao, dolar.maximo, dolar.minimo, 1000000000);
               return analise && (
                 <div className="bg-slate-800/50 backdrop-blur rounded-xl p-6 border border-slate-700">
                   <div className="flex justify-between items-start mb-4">
@@ -567,7 +830,12 @@ const App = () => {
             <div className="mt-6">
               <h3 className="text-lg font-bold mb-4">Análise das Principais Ações</h3>
               {acoes.slice(0, 3).map((acao, idx) => {
-                const analise = calcularAnalise(acao.preco, acao.variacao);
+                // Estimando máxima e mínima baseado na variação
+                const variacaoAbs = Math.abs(acao.variacao);
+                const estimativaRange = acao.preco * (variacaoAbs / 100);
+                const maximo = acao.preco + estimativaRange;
+                const minimo = acao.preco - estimativaRange;
+                const analise = calcularAnalise(acao.preco, acao.variacao, maximo, minimo, acao.volume);
                 return analise && (
                   <div key={idx} className="bg-slate-800/50 backdrop-blur rounded-xl p-4 border border-slate-700 mb-4">
                     <div className="flex justify-between items-center mb-2">
